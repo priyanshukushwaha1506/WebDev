@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#174d3a">
+    <meta name="description" content="Combine PDFs and photos into one PDF privately in your browser.">
+    <title>PDF Assembler</title>
+    <link rel="manifest" href="./manifest.webmanifest">
+    <link rel="icon" href="./icons/app.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="./styles.css">
+    <script defer src="./vendor/pdf-lib.min.js"></script>
+    <script defer src="./app.js"></script>
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="./" aria-label="PDF Assembler home">
+          <span class="brand-icon" aria-hidden="true">PDF</span>
+          <span>PDF Assembler</span>
+        </a>
+        <div class="header-actions">
+          <button class="button button-share-app" id="share-app" type="button">Share app</button>
+          <button class="button button-install" id="install-app" type="button" hidden>Install app</button>
+        </div>
+      </header>
+
+      <section class="intro">
+        <p class="eyebrow">FREE · PRIVATE · IN YOUR BROWSER</p>
+        <h1>Put your pages in order.</h1>
+        <p class="intro-copy">Combine documents and photos into one PDF. Your files stay on your device.</p>
+      </section>
+
+      <section class="workspace" aria-label="PDF assembly">
+        <div class="workspace-heading">
+          <div>
+            <h2>Your documents</h2>
+            <p id="file-count">No files added yet</p>
+          </div>
+          <label class="button button-secondary add-button" for="file-input">Add files</label>
+          <input id="file-input" class="visually-hidden" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,application/pdf,image/jpeg,image/png,image/webp,image/gif" multiple>
+        </div>
+
+        <div class="drop-zone" id="drop-zone" tabindex="0" role="button" aria-label="Add PDF and image files">
+          <div class="upload-icon" aria-hidden="true">↑</div>
+          <p><strong>Drop files here</strong> or <button class="text-button" id="browse-files" type="button">browse your device</button></p>
+          <span>PDF, JPG, PNG, WebP and GIF · Add multiple files at once</span>
+        </div>
+
+        <div class="image-options" aria-label="Image processing options">
+          <label class="option-control">
+            <input id="auto-crop" type="checkbox">
+            <span><strong>Auto-crop blank borders</strong><small>Trims detected empty outer margins on photos.</small></span>
+          </label>
+          <label class="page-size-control" for="image-page-size">
+            <span><strong>Image page size</strong><small>PDF pages stay unchanged.</small></span>
+            <select id="image-page-size">
+              <option value="original">Original image size</option>
+              <option value="a4">Fit full image to A4</option>
+            </select>
+          </label>
+        </div>
+
+        <ol id="file-list" class="file-list" aria-label="Files in PDF order"></ol>
+
+        <div class="privacy-note">
+          <span aria-hidden="true">🔒</span>
+          <p>Files are processed on this device and are never uploaded to a server.</p>
+        </div>
+
+        <div class="action-row">
+          <span id="status" class="status" role="status" aria-live="polite">Choose files to get started.</span>
+          <div class="action-buttons">
+            <button class="button button-secondary" id="clear-files" type="button" disabled>Clear all</button>
+            <button class="button button-primary" id="make-pdf" type="button" disabled>
+              <span aria-hidden="true">◉</span> Preview PDF
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section class="how-it-works">
+        <h2>Simple, and safe</h2>
+        <div class="feature-grid">
+          <article>
+            <span>01</span><h3>Add</h3>
+            <p>Choose any number of PDFs and photos.</p>
+            <button class="text-button feature-action" id="step-add" type="button">Choose files</button>
+          </article>
+          <article>
+            <span>02</span><h3>Arrange</h3>
+            <p>Move each file up or down to set its place.</p>
+            <button class="text-button feature-action" id="step-arrange" type="button">Review file order</button>
+          </article>
+          <article>
+            <span>03</span><h3>Save or share</h3>
+            <p>Preview every page, then download or share the PDF.</p>
+            <button class="text-button feature-action" id="step-save" type="button">Preview PDF</button>
+          </article>
+        </div>
+      </section>
+
+      <footer>
+        <p>PDF pages stay intact. Photos are never cropped unless you choose a crop.</p>
+        <button class="text-button" id="install-help" type="button">Add to Home Screen</button>
+      </footer>
+    </main>
+
+    <dialog id="crop-dialog" class="crop-dialog">
+      <form method="dialog" class="crop-form">
+        <div class="dialog-heading">
+          <div><p class="eyebrow">OPTIONAL</p><h2>Crop this photo</h2></div>
+          <button class="icon-button" value="cancel" aria-label="Close crop dialog">×</button>
+        </div>
+        <p class="dialog-hint">Drag around the part to keep. Nothing is removed until you apply the crop.</p>
+        <div class="crop-preview"><canvas id="crop-canvas"></canvas></div>
+        <div class="dialog-actions">
+          <button class="button button-secondary" id="reset-crop" type="button">Use full photo</button>
+          <button class="button button-primary" id="apply-crop" type="button">Apply crop</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="pdf-preview-dialog" class="pdf-preview-dialog" aria-labelledby="pdf-preview-title">
+      <div class="pdf-preview-shell">
+        <header class="pdf-preview-header">
+          <div>
+            <p class="eyebrow">REVIEW BEFORE SAVING</p>
+            <h2 id="pdf-preview-title">PDF preview</h2>
+            <p id="pdf-preview-count" class="pdf-preview-count" aria-live="polite"></p>
+          </div>
+          <button class="icon-button pdf-preview-close" id="close-pdf-preview" type="button" aria-label="Back to editing">×</button>
+        </header>
+        <div id="pdf-preview-pages" class="pdf-preview-pages" aria-label="PDF page previews">
+          <p id="pdf-preview-loading" class="pdf-preview-loading" role="status">Preparing your PDF preview…</p>
+        </div>
+        <footer class="pdf-preview-actions">
+          <button class="button button-secondary" id="back-to-edit" type="button">Back to edit</button>
+          <button class="button button-secondary" id="download-pdf" type="button" disabled>Download PDF</button>
+          <button class="button button-primary" id="share-pdf" type="button" disabled>Share PDF</button>
+        </footer>
+      </div>
+    </dialog>
+
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  </body>
+</html>
