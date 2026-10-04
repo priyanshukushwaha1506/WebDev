@@ -26,6 +26,10 @@ For ongoing changes, connect the Netlify site to a Git repository and commit/pus
 
 Installed copies check the deployed files again when opened online and use their cached copy offline. After a deployment, close and reopen or refresh the installed app to load the latest version. A Netlify Drop site that has not been claimed is temporary and expires; claim it in Netlify before relying on its address for future updates.
 
+## Install from Android or publish to Google Play
+
+On Android, open the deployed HTTPS site in Chrome and choose **Install app** or **Add to Home screen**. This installs the PWA without a Play Store listing. Publishing there requires a separate Android Trusted Web Activity package, a stable verified HTTPS domain, Digital Asset Links signing configuration, and a Google Play developer account; a website deployment alone does not publish an Android app.
+
 ## Supported files and limitations
 
 - Any number of unencrypted PDFs and JPEG, PNG, WebP, or GIF image files.
@@ -33,6 +37,7 @@ Installed copies check the deployed files again when opened online and use their
 - Photos are kept in full by default. **Auto-crop blank borders** is an optional setting; the automatic detector is conservative and leaves images unchanged when it cannot identify safe margins. You can also crop an individual photo by hand.
 - **Image page size** can keep the photo's original page dimensions or fit the whole image onto portrait or landscape A4 without cutting it off. Both image settings apply to every photo and do not change existing PDF pages.
 - Files are processed in browser memory. Large files may use substantial device memory.
+- Phone JPEG photos are re-encoded at high quality to avoid a much larger intermediate PNG and reduce output size. PNG, WebP, and GIF inputs remain lossless in the generated PDF.
 - Animated images are added as a single still image in the browser.
 - PDF form fields, digital signatures, and unusual interactive features may not be retained by PDF page copying. Keep your original files.
 

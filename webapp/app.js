@@ -35,6 +35,8 @@ let cropPointerStart = null;
 let deferredInstallPrompt = null;
 let toastTimeout = null;
 let previewObserver = null;
+let previewDocument = null;
+let isAssembling = false;
 const previewRenderTasks = new Set();
 let previewGeneration = 0;
 
@@ -73,8 +75,12 @@ function updateControls() {
   fileCount.textContent = hasFiles
     ? `${items.length} file${items.length === 1 ? "" : "s"} in merge order`
     : "No files added yet";
-  makePdfButton.disabled = !hasFiles;
-  clearButton.disabled = !hasFiles;
+  makePdfButton.disabled = !hasFiles || isAssembling;
+  clearButton.disabled = !hasFiles || isAssembling;
+  fileInput.disabled = isAssembling;
+  browseButton.disabled = isAssembling;
+  autoCropInput.disabled = isAssembling;
+  imagePageSize.disabled = isAssembling;
 }
 
 function renderList() {
@@ -113,13 +119,16 @@ function renderList() {
       crop.type = "button";
       crop.textContent = item.crop ? "Edit crop" : "Crop";
       crop.setAttribute("aria-label", `${item.crop ? "Edit crop for" : "Crop"} ${item.file.name}`);
-      crop.addEventListener("click", () => openCrop(item.id));
+      crop.disabled = isAssembling;
+      crop.addEventListener("click", () => {
+        if (!isAssembling) openCrop(item.id);
+      });
       controls.append(crop);
     }
     controls.append(
-      createIconButton("↑", `Move ${item.file.name} up`, index === 0, () => moveItem(index, -1)),
-      createIconButton("↓", `Move ${item.file.name} down`, index === items.length - 1, () => moveItem(index, 1)),
-      createIconButton("×", `Remove ${item.file.name}`, false, () => removeItem(item.id)),
+      createIconButton("↑", `Move ${item.file.name} up`, isAssembling || index === 0, () => moveItem(index, -1)),
+      createIconButton("↓", `Move ${item.file.name} down`, isAssembling || index === items.length - 1, () => moveItem(index, 1)),
+      createIconButton("×", `Remove ${item.file.name}`, isAssembling, () => removeItem(item.id)),
     );
     row.append(preview, info, controls);
     fileList.append(row);
@@ -139,6 +148,7 @@ function createIconButton(label, ariaLabel, disabled, action) {
 }
 
 function moveItem(index, direction) {
+  if (isAssembling) return;
   const newIndex = index + direction;
   if (newIndex < 0 || newIndex >= items.length) return;
   [items[index], items[newIndex]] = [items[newIndex], items[index]];
@@ -146,6 +156,7 @@ function moveItem(index, direction) {
 }
 
 function removeItem(id) {
+  if (isAssembling) return;
   const index = items.findIndex((item) => item.id === id);
   if (index < 0) return;
   const [removed] = items.splice(index, 1);
@@ -156,6 +167,7 @@ function removeItem(id) {
 }
 
 function addFiles(fileCollection) {
+  if (isAssembling) return;
   const existing = new Set(items.map((item) => `${item.file.name}:${item.file.size}:${item.file.lastModified}`));
   let added = 0;
   let rejected = 0;
@@ -319,10 +331,16 @@ async function imageBytesForPdf(item) {
   image.close();
   const contentBounds = autoCropInput.checked ? detectContentBounds(canvas) : null;
   const finalBounds = contentBounds || { left: 0, top: 0, right: 1, bottom: 1 };
+  const isJpeg = item.file.type === "image/jpeg" || /\.jpe?g$/i.test(item.file.name);
+  const imageType = isJpeg ? "image/jpeg" : "image/png";
   const outputCanvas = document.createElement("canvas");
   outputCanvas.width = Math.max(1, Math.round((finalBounds.right - finalBounds.left) * sourceWidth));
   outputCanvas.height = Math.max(1, Math.round((finalBounds.bottom - finalBounds.top) * sourceHeight));
-  const outputContext = outputCanvas.getContext("2d", { alpha: false });
+  const outputContext = outputCanvas.getContext("2d", { alpha: !isJpeg });
+  if (isJpeg) {
+    outputContext.fillStyle = "#fff";
+    outputContext.fillRect(0, 0, outputCanvas.width, outputCanvas.height);
+  }
   outputContext.drawImage(
     canvas,
     Math.round(finalBounds.left * sourceWidth),
@@ -335,9 +353,13 @@ async function imageBytesForPdf(item) {
     outputCanvas.height,
   );
   const blob = await new Promise((resolve, reject) => {
-    outputCanvas.toBlob((result) => result ? resolve(result) : reject(new Error("Could not prepare an image for the PDF.")), "image/png");
+    outputCanvas.toBlob(
+      (result) => result ? resolve(result) : reject(new Error("Could not prepare an image for the PDF.")),
+      imageType,
+      isJpeg ? 0.94 : undefined,
+    );
   });
-  return { bytes: await bytesFromBlob(blob), width: outputCanvas.width, height: outputCanvas.height };
+  return { bytes: await bytesFromBlob(blob), width: outputCanvas.width, height: outputCanvas.height, imageType };
 }
 
 function detectContentBounds(canvas) {
@@ -443,10 +465,13 @@ function safePdfName(value) {
   return value.replace(/[<>:"/\\|?*\u0000-\u001f]/g, "-").replace(/\.pdf$/i, "").trim() || "assembled-document";
 }
 
-async function assemblePdf() {
+async function assemblePdf(onProgress) {
   if (items.length === 0) throw new Error("Add at least one PDF or photo first.");
   const result = await PDFDocument.create();
-  for (const item of items) {
+  const itemCount = items.length;
+  for (const [index, item] of items.entries()) {
+    onProgress(index, itemCount, item);
+    await new Promise((resolve) => window.requestAnimationFrame(resolve));
     if (item.isPdf) {
       const source = await PDFDocument.load(await bytesFromBlob(item.file));
       const pages = await result.copyPages(source, source.getPageIndices());
@@ -454,7 +479,9 @@ async function assemblePdf() {
       continue;
     }
     const imageData = await imageBytesForPdf(item);
-    const embedded = await result.embedPng(imageData.bytes);
+    const embedded = imageData.imageType === "image/jpeg"
+      ? await result.embedJpg(imageData.bytes)
+      : await result.embedPng(imageData.bytes);
     if (imagePageSize.value === "a4") {
       const isLandscape = imageData.width > imageData.height;
       const pageWidth = isLandscape ? 841.89 : 595.28;
@@ -492,6 +519,16 @@ function downloadPdf(file) {
   window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
+function destroyPreviewDocument() {
+  const documentProxy = previewDocument;
+  previewDocument = null;
+  if (documentProxy) {
+    documentProxy.destroy().catch((error) => {
+      console.error("Could not release PDF preview resources:", error);
+    });
+  }
+}
+
 function discardPdfPreview() {
   lastPdf = null;
   downloadPdfButton.disabled = true;
@@ -503,10 +540,12 @@ async function renderPdfPage(pageNumber, loadingTask, generation) {
   const container = pdfPreviewPages.querySelector(`[data-page-number="${pageNumber}"]`);
   if (!container || generation !== previewGeneration) return false;
   if (container.dataset.rendered === "true") return Boolean(container.querySelector("canvas"));
-  container.dataset.rendered = "true";
+  if (container.dataset.rendering === "true") return false;
+  container.dataset.rendering = "true";
   let renderTask = null;
+  let pdfPage = null;
   try {
-    const pdfPage = await loadingTask.getPage(pageNumber);
+    pdfPage = await loadingTask.getPage(pageNumber);
     if (generation !== previewGeneration) return false;
     const availableWidth = Math.min(800, Math.max(240, pdfPreviewPages.clientWidth - 36));
     const baseViewport = pdfPage.getViewport({ scale: 1 });
@@ -527,13 +566,11 @@ async function renderPdfPage(pageNumber, loadingTask, generation) {
     });
     previewRenderTasks.add(renderTask);
     await renderTask.promise;
-    previewRenderTasks.delete(renderTask);
-    pdfPage.cleanup();
+    if (generation !== previewGeneration) return false;
+    container.dataset.rendered = "true";
     return true;
   } catch (error) {
-    if (renderTask) previewRenderTasks.delete(renderTask);
     if (generation !== previewGeneration || error.name === "RenderingCancelledException") return false;
-    container.dataset.rendered = "false";
     container.querySelector(".pdf-page-placeholder")?.remove();
     const message = document.createElement("span");
     message.className = "pdf-page-error";
@@ -541,7 +578,26 @@ async function renderPdfPage(pageNumber, loadingTask, generation) {
     container.append(message);
     console.error(`Could not render PDF page ${pageNumber}:`, error);
     return false;
+  } finally {
+    if (renderTask) previewRenderTasks.delete(renderTask);
+    if (pdfPage) pdfPage.cleanup();
+    container.dataset.rendering = "false";
   }
+}
+
+function releasePdfPage(container) {
+  if (container.dataset.rendered !== "true" || container.dataset.rendering === "true") return;
+  const canvas = container.querySelector("canvas");
+  const pageNumber = container.dataset.pageNumber;
+  if (!canvas || pageNumber === "1") return;
+  canvas.width = 0;
+  canvas.height = 0;
+  const badge = container.querySelector(".pdf-page-number");
+  const placeholder = document.createElement("span");
+  placeholder.className = "pdf-page-placeholder";
+  placeholder.textContent = `Page ${pageNumber} preview loads as you scroll`;
+  container.replaceChildren(placeholder, badge);
+  container.dataset.rendered = "false";
 }
 
 async function openPdfPreview(file) {
@@ -550,6 +606,7 @@ async function openPdfPreview(file) {
   if (previewObserver) previewObserver.disconnect();
   for (const renderTask of previewRenderTasks) renderTask.cancel();
   previewRenderTasks.clear();
+  destroyPreviewDocument();
   pdfPreviewPages.replaceChildren(pdfPreviewLoading);
   pdfPreviewLoading.hidden = false;
   pdfPreviewLoading.textContent = "Preparing your PDF preview…";
@@ -568,31 +625,44 @@ async function openPdfPreview(file) {
       await documentProxy.destroy();
       return;
     }
+    previewDocument = documentProxy;
     pdfPreviewLoading.hidden = true;
     pdfPreviewCount.textContent = `${documentProxy.numPages} page${documentProxy.numPages === 1 ? "" : "s"} · Scroll to review`;
 
-    for (let pageNumber = 1; pageNumber <= documentProxy.numPages; pageNumber += 1) {
-      const pageProxy = await documentProxy.getPage(pageNumber);
+    const pageBatchSize = 8;
+    for (let firstPage = 1; firstPage <= documentProxy.numPages; firstPage += pageBatchSize) {
+      const pageNumbers = Array.from(
+        { length: Math.min(pageBatchSize, documentProxy.numPages - firstPage + 1) },
+        (_, offset) => firstPage + offset,
+      );
+      const pageDimensions = await Promise.all(pageNumbers.map(async (pageNumber) => {
+        const pageProxy = await documentProxy.getPage(pageNumber);
+        const viewport = pageProxy.getViewport({ scale: 1 });
+        pageProxy.cleanup();
+        return { pageNumber, width: viewport.width, height: viewport.height };
+      }));
       if (generation !== previewGeneration) {
         await documentProxy.destroy();
+        if (previewDocument === documentProxy) previewDocument = null;
         return;
       }
-      const viewport = pageProxy.getViewport({ scale: 1 });
-      pageProxy.cleanup();
-      const pageContainer = document.createElement("div");
-      pageContainer.className = "pdf-page-preview";
-      pageContainer.dataset.pageNumber = String(pageNumber);
-      pageContainer.dataset.rendered = "false";
-      pageContainer.setAttribute("aria-label", `PDF page ${pageNumber}`);
-      pageContainer.style.aspectRatio = `${viewport.width} / ${viewport.height}`;
-      const placeholder = document.createElement("span");
-      placeholder.className = "pdf-page-placeholder";
-      placeholder.textContent = "Loading page preview…";
-      const badge = document.createElement("span");
-      badge.className = "pdf-page-number";
-      badge.textContent = `Page ${pageNumber}`;
-      pageContainer.append(placeholder, badge);
-      pdfPreviewPages.append(pageContainer);
+      for (const { pageNumber, width, height } of pageDimensions) {
+        const pageContainer = document.createElement("div");
+        pageContainer.className = "pdf-page-preview";
+        pageContainer.dataset.pageNumber = String(pageNumber);
+        pageContainer.dataset.rendered = "false";
+        pageContainer.dataset.rendering = "false";
+        pageContainer.setAttribute("aria-label", `PDF page ${pageNumber}`);
+        pageContainer.style.aspectRatio = `${width} / ${height}`;
+        const placeholder = document.createElement("span");
+        placeholder.className = "pdf-page-placeholder";
+        placeholder.textContent = `Page ${pageNumber} preview loads as you scroll`;
+        const badge = document.createElement("span");
+        badge.className = "pdf-page-number";
+        badge.textContent = `Page ${pageNumber}`;
+        pageContainer.append(placeholder, badge);
+        pdfPreviewPages.append(pageContainer);
+      }
     }
 
     const firstPageRendered = await renderPdfPage(1, documentProxy, generation);
@@ -601,13 +671,14 @@ async function openPdfPreview(file) {
     }
     previewObserver = new IntersectionObserver((entries) => {
       for (const entry of entries) {
-        if (!entry.isIntersecting) continue;
-        renderPdfPage(Number(entry.target.dataset.pageNumber), documentProxy, generation);
-        previewObserver.unobserve(entry.target);
+        if (entry.isIntersecting) {
+          renderPdfPage(Number(entry.target.dataset.pageNumber), documentProxy, generation);
+        } else {
+          releasePdfPage(entry.target);
+        }
       }
-    }, { root: pdfPreviewPages, rootMargin: "600px 0px" });
+    }, { root: pdfPreviewPages, rootMargin: "500px 0px" });
     for (const pageContainer of pdfPreviewPages.querySelectorAll(".pdf-page-preview")) {
-      if (pageContainer.dataset.pageNumber === "1") continue;
       previewObserver.observe(pageContainer);
     }
     pdfPreviewDialog.classList.remove("is-loading");
@@ -615,6 +686,7 @@ async function openPdfPreview(file) {
     shareButton.disabled = false;
   } catch (error) {
     if (generation !== previewGeneration) return;
+    destroyPreviewDocument();
     pdfPreviewLoading.hidden = false;
     pdfPreviewLoading.textContent = `Could not prepare the preview: ${error.message}`;
     pdfPreviewLoading.classList.add("status", "error");
@@ -625,10 +697,16 @@ async function openPdfPreview(file) {
 }
 
 async function makePdf() {
+  if (isAssembling) return;
+  isAssembling = true;
+  updateControls();
+  statusMessage.setAttribute("aria-busy", "true");
   makePdfButton.disabled = true;
-  showStatus("Creating PDF for preview on this device…");
+  showStatus("Preparing your PDF on this device…");
   try {
-    const bytes = await assemblePdf();
+    const bytes = await assemblePdf((index, count, item) => {
+      showStatus(`Preparing file ${index + 1} of ${count}: ${item.file.name}`);
+    });
     const firstName = items[0].file.name;
     const filename = `${safePdfName(firstName)}-combined.pdf`;
     lastPdf = new File([bytes], filename, { type: "application/pdf" });
@@ -640,7 +718,9 @@ async function makePdf() {
       : "";
     showStatus(`Could not create the PDF: ${error.message}.${hint}`, true);
   } finally {
-    makePdfButton.disabled = items.length === 0;
+    isAssembling = false;
+    statusMessage.removeAttribute("aria-busy");
+    updateControls();
   }
 }
 
@@ -668,6 +748,7 @@ function closePdfPreview() {
   }
   for (const renderTask of previewRenderTasks) renderTask.cancel();
   previewRenderTasks.clear();
+  destroyPreviewDocument();
   pdfPreviewDialog.close();
   pdfPreviewPages.replaceChildren(pdfPreviewLoading);
   pdfPreviewLoading.hidden = false;
