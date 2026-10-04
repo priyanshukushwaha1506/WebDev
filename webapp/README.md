@@ -35,15 +35,15 @@ On Android, open the deployed HTTPS site in Chrome and choose **Install app** or
 - Any number of unencrypted PDFs and JPEG, PNG, WebP, or GIF image files.
 - All pages of each PDF are copied in their selected order.
 - Photos are kept in full by default. **Auto-crop blank borders** is an optional setting; the automatic detector is conservative and leaves images unchanged when it cannot identify safe margins. You can also crop an individual photo by hand.
-- **Image page size** can keep the photo's original page dimensions or fit the whole image onto portrait or landscape A4 without cutting it off. Both image settings apply to every photo and do not change existing PDF pages.
+- **Image page size** can keep the photo's original page dimensions or fit the whole image onto portrait or landscape A4 without cutting it off. A4 output is limited to 3508 pixels on the long edge (about 300 dpi) to keep mobile memory and PDF size manageable. Both image settings apply to every photo and do not change existing PDF pages.
 - Files are processed in browser memory. Large files may use substantial device memory.
-- Phone JPEG photos are re-encoded at high quality to avoid a much larger intermediate PNG and reduce output size. PNG, WebP, and GIF inputs remain lossless in the generated PDF.
+- Phone JPEG photos are re-encoded at high quality to avoid a much larger intermediate PNG and reduce output size. PNG, WebP, and GIF inputs use lossless encoding; A4 fit may resample any image to the 300 dpi size limit.
 - Animated images are added as a single still image in the browser.
 - PDF form fields, digital signatures, and unusual interactive features may not be retained by PDF page copying. Keep your original files.
 
 ## Offline and installable behavior
 
-The app shell and PDF engine are cached by its service worker after the first visit. Installation requires an HTTPS address (or `localhost` during local development); opening the files directly from a downloaded ZIP does not enable install/offline features.
+The app shell, PDF engine, and standard install icons are cached by the service worker after the first visit. The PDF preview renderer and its worker are cached the first time a preview is opened, keeping the initial mobile install lighter. Installation requires an HTTPS address (or `localhost` during local development); opening the files directly from a downloaded ZIP does not enable install/offline features.
 The app includes SVG, 192×192, and 512×512 install icons. When the app is online, its service worker checks the network first and refreshes its offline cache; when offline, it falls back to the last cached files. The service worker checks for updates on page load and its script is excluded from browser caching.
 
 The included `vendor/pdf-lib.min.js` is pdf-lib 1.17.1. Its license is in `vendor/pdf-lib-LICENSE.md`.

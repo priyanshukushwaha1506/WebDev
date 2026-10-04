@@ -3,6 +3,7 @@
 
 const { PDFDocument } = PDFLib;
 const MAX_PREVIEW_SIDE = 1200;
+const MAX_A4_IMAGE_SIDE = 3508;
 const IMAGE_FORMATS = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif"]);
 const fileInput = document.querySelector("#file-input");
 const browseButton = document.querySelector("#browse-files");
@@ -333,9 +334,18 @@ async function imageBytesForPdf(item) {
   const finalBounds = contentBounds || { left: 0, top: 0, right: 1, bottom: 1 };
   const isJpeg = item.file.type === "image/jpeg" || /\.jpe?g$/i.test(item.file.name);
   const imageType = isJpeg ? "image/jpeg" : "image/png";
+  const sourceLeft = Math.round(finalBounds.left * sourceWidth);
+  const sourceTop = Math.round(finalBounds.top * sourceHeight);
+  const sourceRight = Math.round(finalBounds.right * sourceWidth);
+  const sourceBottom = Math.round(finalBounds.bottom * sourceHeight);
+  const croppedWidth = Math.max(1, sourceRight - sourceLeft);
+  const croppedHeight = Math.max(1, sourceBottom - sourceTop);
+  const resolutionScale = imagePageSize.value === "a4"
+    ? Math.min(1, MAX_A4_IMAGE_SIDE / Math.max(croppedWidth, croppedHeight))
+    : 1;
   const outputCanvas = document.createElement("canvas");
-  outputCanvas.width = Math.max(1, Math.round((finalBounds.right - finalBounds.left) * sourceWidth));
-  outputCanvas.height = Math.max(1, Math.round((finalBounds.bottom - finalBounds.top) * sourceHeight));
+  outputCanvas.width = Math.max(1, Math.round(croppedWidth * resolutionScale));
+  outputCanvas.height = Math.max(1, Math.round(croppedHeight * resolutionScale));
   const outputContext = outputCanvas.getContext("2d", { alpha: !isJpeg });
   if (isJpeg) {
     outputContext.fillStyle = "#fff";
@@ -343,10 +353,10 @@ async function imageBytesForPdf(item) {
   }
   outputContext.drawImage(
     canvas,
-    Math.round(finalBounds.left * sourceWidth),
-    Math.round(finalBounds.top * sourceHeight),
-    outputCanvas.width,
-    outputCanvas.height,
+    sourceLeft,
+    sourceTop,
+    croppedWidth,
+    croppedHeight,
     0,
     0,
     outputCanvas.width,
@@ -471,7 +481,7 @@ async function assemblePdf(onProgress) {
   const itemCount = items.length;
   for (const [index, item] of items.entries()) {
     onProgress(index, itemCount, item);
-    await new Promise((resolve) => window.requestAnimationFrame(resolve));
+    await new Promise((resolve) => window.setTimeout(resolve, 0));
     if (item.isPdf) {
       const source = await PDFDocument.load(await bytesFromBlob(item.file));
       const pages = await result.copyPages(source, source.getPageIndices());

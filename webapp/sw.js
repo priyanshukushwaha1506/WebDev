@@ -1,6 +1,6 @@
 "use strict";
 
-const CACHE_NAME = "pdf-assembler-v6";
+const CACHE_NAME = "pdf-assembler-v8";
 const APP_FILES = [
   "./",
   "./index.html",
@@ -11,8 +11,6 @@ const APP_FILES = [
   "./icons/app-192.png",
   "./icons/app-512.png",
   "./vendor/pdf-lib.min.js",
-  "./vendor/pdf-preview.js",
-  "./vendor/pdf-preview-worker.js",
 ];
 
 self.addEventListener("install", (event) => {
