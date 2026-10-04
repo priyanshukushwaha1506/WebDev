@@ -11,7 +11,7 @@ Open `index.html` in Chrome to try basic file selection and merging. For app ins
 1. Extract the app package.
 2. For Netlify, either import this project from a Git repository (Netlify uses the included `netlify.toml` and publishes `webapp`) or upload the contents of `webapp` to [Netlify Drop](https://app.netlify.com/drop). Keep the `vendor` and `icons` folders alongside `index.html`.
 3. Open the resulting HTTPS address in Chrome on your phone.
-4. In Chrome's menu, choose **Install app** or **Add to Home screen**.
+4. Tap **Install app** in the page header for browser-specific instructions. On Android Chrome, choose **Install app** or **Add to Home screen** from the browser menu. On iPhone or iPad, open the site in Safari and use **Share > Add to Home Screen**.
 5. Tap **Share app** in the header to send the app link to others. On a phone, choose WhatsApp or another app from the share menu.
 6. Tap **Preview PDF** and review the generated pages. Use **Back to edit** to change the order, crop, or page settings. **Download PDF** and **Share PDF** are enabled only after the first page is rendered for review.
 7. To send the reviewed PDF to WhatsApp, tap **Share PDF** and choose WhatsApp from the share sheet, then choose the recipient.

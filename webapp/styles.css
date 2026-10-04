@@ -190,6 +190,15 @@ h1 { margin: 0; font-size: clamp(28px, 6vw, 42px); letter-spacing: -.045em; line
 
 footer { display: flex; justify-content: space-between; gap: 12px; padding: 15px 0 25px; color: var(--muted); font-size: 11px; }
 footer p { margin: 0; }
+.install-dialog { width: min(94vw, 500px); max-height: 90vh; padding: 0; overflow: auto; border: 0; border-radius: 16px; box-shadow: 0 24px 80px rgb(0 0 0 / 24%); }
+.install-dialog::backdrop { background: rgb(13 30 21 / 56%); }
+.install-form { padding: 20px; }
+.install-form h2 { margin: 0; font-size: 20px; }
+.install-form .eyebrow { margin-bottom: 5px; }
+.install-steps { display: grid; gap: 10px; padding-left: 22px; color: var(--ink); font-size: 13px; line-height: 1.5; }
+.install-steps li { padding-left: 3px; }
+.install-note { padding: 12px; border-radius: 10px; background: #f5f8f5; color: var(--muted); font-size: 11px; line-height: 1.5; }
+.install-form .dialog-actions { justify-content: flex-end; margin-top: 15px; }
 .crop-dialog { width: min(94vw, 680px); max-height: 90vh; padding: 0; overflow: auto; border: 0; border-radius: 16px; box-shadow: 0 24px 80px rgb(0 0 0 / 24%); }
 .crop-dialog::backdrop { background: rgb(13 30 21 / 56%); }
 .crop-form { padding: 20px; }
@@ -247,6 +256,7 @@ footer p { margin: 0; }
   .feature-grid h3 { margin: 0; }
   footer { flex-direction: column; }
   .crop-form { padding: 15px; }
+  .install-form { padding: 15px; }
   .pdf-preview-pages { gap: 12px; padding: 12px 8px; }
   .pdf-preview-actions { gap: 7px; padding-right: 9px; padding-left: 9px; }
   .pdf-preview-actions .button { min-height: 40px; padding: 0 8px; font-size: 11px; }

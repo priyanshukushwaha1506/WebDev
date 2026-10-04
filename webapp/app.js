@@ -17,6 +17,10 @@ const makePdfButton = document.querySelector("#make-pdf");
 const clearButton = document.querySelector("#clear-files");
 const shareButton = document.querySelector("#share-pdf");
 const shareAppButton = document.querySelector("#share-app");
+const installButton = document.querySelector("#install-app");
+const installDialog = document.querySelector("#install-dialog");
+const installIntro = document.querySelector("#install-intro");
+const installSteps = document.querySelector("#install-steps");
 const cropDialog = document.querySelector("#crop-dialog");
 const cropCanvas = document.querySelector("#crop-canvas");
 const pdfPreviewDialog = document.querySelector("#pdf-preview-dialog");
@@ -859,30 +863,63 @@ pdfPreviewDialog.addEventListener("cancel", (event) => {
 });
 shareAppButton.addEventListener("click", shareApp);
 
-document.querySelector("#install-help").addEventListener("click", () => {
-  if (deferredInstallPrompt) {
-    deferredInstallPrompt.prompt();
+function showInstallGuide() {
+  const platform = navigator.userAgentData?.platform || navigator.platform || "";
+  const userAgent = navigator.userAgent;
+  let steps;
+  if (/iPhone|iPad|iPod/i.test(userAgent) || (/Mac/i.test(platform) && navigator.maxTouchPoints > 1)) {
+    installIntro.textContent = "On your iPhone or iPad, add this website to your Home Screen from Safari.";
+    steps = [
+      "Open this page in Safari.",
+      "Tap the Share button.",
+      "Scroll down and tap Add to Home Screen, then tap Add.",
+    ];
+  } else if (/Android/i.test(userAgent)) {
+    installIntro.textContent = "Add PDF Assembler to your Android Home Screen for quick access.";
+    steps = [
+      "Open this page in Chrome.",
+      "Tap the three-dot menu in the top corner.",
+      "Tap Install app or Add to Home screen, then confirm.",
+    ];
+  } else {
+    installIntro.textContent = "Install PDF Assembler from your desktop browser for quick access.";
+    steps = [
+      "In Chrome or Edge, select the install icon in the address bar, if shown.",
+      "Alternatively, open the browser menu and choose Install PDF Assembler or Apps > Install this site as an app.",
+      "Confirm the prompt to add the app to your device.",
+    ];
+  }
+  installSteps.replaceChildren(...steps.map((step) => {
+    const item = document.createElement("li");
+    item.textContent = step;
+    return item;
+  }));
+  installDialog.showModal();
+}
+
+async function promptInstall() {
+  if (!deferredInstallPrompt) {
+    showInstallGuide();
     return;
   }
-  showToast("In Chrome, open the menu and choose “Install app” or “Add to Home screen”.");
-});
+  const promptEvent = deferredInstallPrompt;
+  deferredInstallPrompt = null;
+  await promptEvent.prompt();
+  const { outcome } = await promptEvent.userChoice;
+  if (outcome === "dismissed") showInstallGuide();
+}
+
+installButton.addEventListener("click", promptInstall);
+document.querySelector("#install-help").addEventListener("click", promptInstall);
 
 window.addEventListener("beforeinstallprompt", (event) => {
   event.preventDefault();
   deferredInstallPrompt = event;
-  document.querySelector("#install-app").hidden = false;
-});
-
-document.querySelector("#install-app").addEventListener("click", async () => {
-  if (!deferredInstallPrompt) return;
-  deferredInstallPrompt.prompt();
-  await deferredInstallPrompt.userChoice;
-  deferredInstallPrompt = null;
-  document.querySelector("#install-app").hidden = true;
 });
 
 window.addEventListener("appinstalled", () => {
-  document.querySelector("#install-app").hidden = true;
+  installButton.textContent = "App installed";
+  installButton.disabled = true;
   showToast("PDF Assembler was added to your home screen.");
 });
 
